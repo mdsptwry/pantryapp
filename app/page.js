@@ -1,8 +1,12 @@
 "use client"
-import { Box, Stack, Typography, Button, Modal, TextField} from "@mui/material";
+import { Box, Stack, Typography, Button, Modal, TextField, IconButton} from "@mui/material";
 import { firestore } from "@/firebase";
 import {collection, query, getDocs, doc, setDoc, deleteDoc, getDoc, count} from 'firebase/firestore'
 import { useEffect, useState } from "react";
+import DeleteIcon from '@mui/icons-material/Delete'
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
+
 import { ST } from "next/dist/shared/lib/utils";
 
 const style = {
@@ -25,6 +29,9 @@ export default function Home() {
   const [pantry, setPantry] = useState([])
   const [open, setOpen] = useState(false);
   const [itemName, setItemName] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+
+  const [showMessage, setShowMessage] = useState(false);
 
   const handleOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);
@@ -47,6 +54,9 @@ export default function Home() {
       await setDoc(docRef, { count: 1 }); // Set count to 1 if item is new
     }
     await updatePantry(); // Refresh the pantry list
+
+    console.log('Adding item: ${name}');
+    setShowMessage(true);
   };
   
 
@@ -62,6 +72,12 @@ export default function Home() {
       }
     }
     await updatePantry()
+  }
+
+  const deleteItem = async(item) => {
+    const docRef = doc(collection(firestore, 'pantry'), item);
+    await deleteDoc(docRef)
+    await updatePantry();
   }
 
 
@@ -80,6 +96,21 @@ export default function Home() {
     updatePantry()
   }, [])
 
+  useEffect(() => {
+    if (showMessage) {
+      const timer = setTimeout(() => {
+        setShowMessage(false);
+      }, 1500); // Hide the message after 3 seconds
+
+      return () => clearTimeout(timer);
+    }
+  }, [showMessage]);
+
+  const filteredPantry = pantry.filter(({name}) => 
+    name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+
   return ( 
   <Box 
     width="100vw" 
@@ -90,6 +121,28 @@ export default function Home() {
     alignItems={"center"}
     gap={2}
   >
+     {/* Title */}
+  <Typography 
+    variant="h4"        // Adjust the variant for the size you want
+    color="primary"     // You can set the color to primary or any custom color
+    //gutterBottom 
+    marginTop={3}
+  >
+    My Pantry Tracker
+  </Typography>
+
+  {/* Description */}
+  <Typography 
+    variant="body1"     // Body1 is a standard paragraph text; you can adjust this
+    color="textSecondary"  // Subtle color for the description
+    align="center"      // Align text to center
+    paragraph           // Adds space below the description
+  >
+    Keep track of your pantry items with ease. Add, remove, and search for items in your pantry.
+  </Typography>
+
+
+    {/* model */}
     <Modal
         open={open}
         onClose={handleClose}
@@ -105,16 +158,28 @@ export default function Home() {
               id="outline-basic" 
               label="Item" 
               variant="outlined" 
-              fullWidth 
               value={itemName}
               onChange={(e)=> setItemName(e.target.value)}
-              
-              />
+              onKeyPress={(e) => {
+                if (e.key === 'Enter'){
+                  addItem(itemName)
+                  setItemName('')
+                }
+              }}
+            />
+            {showMessage && (
+              <Typography 
+                variant="body2" 
+                color="green"
+                sx={{ marginTop: 1 }}
+              >
+                Item added
+              </Typography>
+            )}
             <Button variant="contained"
             onClick={() => {
               addItem(itemName)
               setItemName('')
-              handleClose()
             }}
             >Add</Button>
           </Stack>
@@ -123,19 +188,49 @@ export default function Home() {
 
     <Button variant="contained"
     onClick={handleOpen}
+    sx={{
+      backgroundColor: "#333",
+      color: "whitesmoke",
+      '&:hover': {
+        backgroundColor: 'black'
+      }
+    }}
     >Add Items</Button>
-    <Box border={'1px solid #333'}>
+
+    {/* search bar implementation */}
+    <TextField 
+      variant="outlined"
+      placeholder="Search Items"
+      sx={{width: '600px', 
+        border: '1px solid',
+        borderRadius: 1.5
+      }}
+      onChange={(e) => setSearchTerm(e.target.value)}
+    />
+   
+    {/* if item doesn't exist in search */}
+    {filteredPantry.length === 0 && searchTerm && (
+      <Typography
+      variant="h9"
+      color={'red'}>
+        Sorry, item does not exist.
+      </Typography>
+    )}
+
+    <Box 
+      border={'1px solid #333'}
+    >
     <Box 
       width="800px"  
       height="100px" 
-      bgcolor={'#ADD8E6'}
+      bgcolor={'#CEEC85'}
       display={'flex'}
       justifyContent={'center'}
       alignItems={'center'}
       border={'1px solid #333'}
     >
       <Typography variant={'h2'} color={'#333'} textAlign={'center'}>
-      Pantry Items
+      Inventory
       </Typography>
     </Box>
     <Stack 
@@ -145,7 +240,7 @@ export default function Home() {
       overflow={'auto'}
       boxShadow={10}
     >
-      {pantry.map(({name, count}) => (
+      {filteredPantry.map(({name, count}) => (
         <Box
         key={name}
         width="100%"
@@ -153,9 +248,9 @@ export default function Home() {
         display={"flex"}
         justifyContent={"space-between"}
         alignItems={"center"}
-        bgcolor={'f0f0f0'}
+        bgcolor={'snow'}
         padding={5}
-        boxShadow={4}
+        boxShadow={2}
         >
           <Typography
             variant={'h3'}
@@ -168,22 +263,32 @@ export default function Home() {
           }
           </Typography>
 
-          <Typography 
+
+        <Stack direction={"row"} spacing={2}>
+
+        <AddCircleOutlineIcon 
+            onClick={() => addItem(name)} 
+            sx={{ fontSize: 30, cursor: 'pointer', color: 'green' }}
+          />
+        <Typography 
           variant={'h5'} 
           color={'#333'}
           alignItems={'center'}
           >
-            Quantity:{count}      
+            Qty: {count}      
           </Typography>
 
-        <Stack direction={"row"} spacing={2}>
-        <Button 
-        variant="contained" 
-        onClick={() => addItem(name)}>Add</Button>
-        
-        <Button 
-        variant="contained" 
-        onClick={() => removeItem(name)}>Remove</Button>
+          <RemoveCircleOutlineIcon 
+            onClick={() => removeItem(name)} 
+            sx={{ fontSize: 30, cursor: 'pointer', color: 'blue' }}
+          />
+
+        <IconButton 
+         color="error"
+         onClick={() => deleteItem(name)}
+        >
+          <DeleteIcon  />
+        </IconButton>
         </Stack>
         </Box>
       ))}
